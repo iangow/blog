@@ -1,0 +1,62 @@
+---
+title: Covid-19 in selected countries
+author: Ian D. Gow
+date: '2020-06-11'
+slug: covid-other-countries
+categories: []
+tags: []
+---
+
+Today, I thought I'd check in on Covid-19 in some other countries. Yikes! Brazil!?
+
+```{r get_data, message=FALSE, echo=FALSE}
+library(readr)
+library(lubridate)
+library(dplyr, warn.conflicts = FALSE)
+library(ggplot2)
+library(RcppRoll)
+
+covid_world_raw <- read_csv(paste0("https://",
+                                   "covid.ourworldindata.org",
+                                   "/data/owid-covid-data.csv"))
+```
+
+
+```{r focus_data}
+selected_countries <- c("CHN", "USA", "IDN", 
+                        "IND", "BRA", "MEX")
+
+covid_world <-
+  covid_world_raw %>%
+  filter(iso_code %in% selected_countries)
+```
+
+### Cases
+
+```{r plot_cases, echo=FALSE}
+covid_world %>%
+  group_by(location) %>%
+  arrange(date) %>%
+  mutate(new_cases = roll_meanr(new_cases, n = 7, fill = NA)) %>%
+  filter(!is.na(new_cases)) %>%
+  ggplot(aes(x = date, y = new_cases, color = location)) +
+  geom_line() +
+  scale_x_date(breaks = "4 weeks", date_minor_breaks = "1 week")
+```
+
+
+### Deaths
+
+```{r plot_deaths, echo=FALSE}
+# So use a seven-day rolling average
+covid_world %>%
+  group_by(location) %>%
+  arrange(date) %>%
+  mutate(new_deaths = roll_meanr(new_deaths, n = 7, fill = NA)) %>%
+  filter(!is.na(new_deaths)) %>%
+  ggplot(aes(x = date, y = new_deaths, color = location)) +
+  geom_line() +
+  scale_x_date(breaks = "4 weeks", date_minor_breaks = "1 week")
+```
+
+

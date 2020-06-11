@@ -1,0 +1,82 @@
+---
+title: Customized Covid-19 news
+author: Ian D. Gow
+date: '2020-06-09'
+slug: customized-covid-19-news
+categories: []
+tags: []
+---
+
+
+
+<p>I recently read a newspaper headline that read <a href="https://www.wsj.com/articles/california-and-some-other-states-see-coronavirus-cases-rise-11591540411?shareToken=st8ed170060eaf4b31aa5852c0d23e3691">“California and Some Other States See Coronavirus Cases Rise”</a> and thought “I already knew that!” This was because I had been dabbling with the data to make my own plots.</p>
+<p>An interesting aspect of the COVID-19 pandemic is that data-based reporting has moved to the fore.
+Nonetheless, I often find the reporting inadequate, not because it’s bad, but because what I am interested in understanding isn’t necessarily what is being reported.</p>
+<p>But, with a modicum of data skills, it is easy to do your own reporting.
+For example, the New York Times provides COVID-19 data by state <a href="https://github.com/nytimes/covid-19-data/">here</a>.
+And <a href="https://ourworldindata.org/coronavirus"><em>Our World in Data</em></a> has extensive data on COVID-19 around the world.</p>
+<p>The two key data variables are <em>cases</em> and <em>deaths</em>. As a measure of progress of the pandemic, cases are a more timely statistic than deaths (and also a little less morbid), but there are by-now-well-understood issues with cases, such as under-reporting due to lack of symptoms, or symptoms insufficiently serious to lead to hospitalization or testing. As pointed out in <a href="https://www.wsj.com/articles/california-and-some-other-states-see-coronavirus-cases-rise-11591540411?shareToken=st8ed170060eaf4b31aa5852c0d23e3691">the <em>WSJ</em> article</a> linked to above, as testing capacity increases, we might expect to see a rise in reported cases, even if the underlying number of cases is flat.</p>
+<div id="getting-the-data" class="section level2">
+<h2>Getting the data</h2>
+<p>Getting the data is quite easy.</p>
+<pre class="r"><code>library(readr)
+library(lubridate)
+library(dplyr, warn.conflicts = FALSE)
+library(ggplot2)
+library(RcppRoll)
+
+raw &lt;- read_csv(paste0(&quot;https://raw.githubusercontent.com/&quot;,
+                       &quot;nytimes/covid-19-data/master/us-states.csv&quot;))
+
+covid_world_raw &lt;- read_csv(paste0(&quot;https://covid.ourworldindata.org&quot;,
+                               &quot;/data/owid-covid-data.csv&quot;))
+
+covid_states &lt;-
+  raw %&gt;%
+  group_by(state) %&gt;%
+  arrange(date) %&gt;%
+  mutate(new_cases = cases - lag(cases),
+         new_deaths = deaths - lag(deaths)) %&gt;%
+  rename(total_deaths = deaths,
+         total_cases = cases)</code></pre>
+<p>Initially, I wanted to consider Australia as a US state for the purpose of comparison. For the US, I focused on a few states of interest: New York was the worst-hit state, Massachusetts is where I am now, and California is the most populous state. Pennsylvania provides an interesting comparison for Massachusetts. Apart from Australia, I also considered the United Kingdom, which was hit at about the same time as New York.</p>
+<pre class="r"><code>selected_states &lt;- c(&quot;Massachusetts&quot;, &quot;New York&quot;, &quot;Pennsylvania&quot;, &quot;California&quot;)
+selected_countries &lt;- c(&quot;AUS&quot;, &quot;GBR&quot;)
+
+covid_aus_usa &lt;-
+  covid_world_raw %&gt;%
+  filter(iso_code %in% selected_countries) %&gt;%
+  select(location:new_deaths) %&gt;%
+  rename(state = location)
+  
+  covid_selected &lt;-
+  covid_states %&gt;%
+  filter(state %in% selected_states) %&gt;%
+  union_all(covid_aus_usa)</code></pre>
+<div id="cases" class="section level3">
+<h3>Cases</h3>
+<p>One thing I noticed initially was a definite lumpiness to the data (e.g., many more deaths on Tuesdays rather than Sundays in Pennsylvania), which I assume is down to reporting rather than actual events. Initially, I used a four-day moving average, but here I use a seven-day moving average (as the four-day one still showed clean peaks and valleys).</p>
+<pre class="r"><code>covid_selected %&gt;%
+  group_by(state) %&gt;%
+  arrange(date) %&gt;%
+  mutate(new_cases = roll_meanr(new_cases, n = 7, fill = NA)) %&gt;%
+  filter(!is.na(new_cases)) %&gt;%
+  ggplot(aes(x = date, y = new_cases, color = state)) +
+  geom_line() +
+  scale_x_date(breaks = &quot;4 weeks&quot;, date_minor_breaks = &quot;1 week&quot;)</code></pre>
+<p><img src="/post/2020-06-09-customized-covid-19-news_files/figure-html/plot_cases-1.png" width="672" /></p>
+</div>
+<div id="deaths" class="section level3">
+<h3>Deaths</h3>
+<pre class="r"><code># So use a seven-day rolling average
+covid_selected %&gt;%
+  group_by(state) %&gt;%
+  arrange(date) %&gt;%
+  mutate(new_deaths = roll_meanr(new_deaths, n = 7, fill = NA)) %&gt;%
+  filter(!is.na(new_deaths)) %&gt;%
+  ggplot(aes(x = date, y = new_deaths, color = state)) +
+  geom_line() +
+  scale_x_date(breaks = &quot;4 weeks&quot;, date_minor_breaks = &quot;1 week&quot;)</code></pre>
+<p><img src="/post/2020-06-09-customized-covid-19-news_files/figure-html/plot_deaths-1.png" width="672" /></p>
+</div>
+</div>
