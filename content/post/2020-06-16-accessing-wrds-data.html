@@ -1,0 +1,263 @@
+---
+title: Accessing WRDS data
+author: Ian D. Gow
+date: '2020-06-16'
+slug: accessing-wrds-data
+categories: []
+tags: []
+---
+
+
+
+<p>WRDS provides some sample code for accessing the WRDS PostgreSQL database <a href="https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-r/querying-wrds-data-r/">here</a>.
+The problem with this code examples is that they use <code>dplyr</code>, which offers a “lazy evaluation” approach
+that is vastly superior accessing remote data sources.</p>
+<p>Another advantage of using a <code>dplyr</code> approach is that the code carries over to local data sources, whereas raw SQL would not.</p>
+<p>Below, I translate each example provided by WRDS into equivalent <code>dplyr</code>.</p>
+<pre class="r"><code>Sys.setenv(PGUSER=&quot;iangow&quot;)</code></pre>
+<pre class="r"><code>library(DBI)
+Sys.setenv(PGHOST=&quot;wrds-pgdata.wharton.upenn.edu&quot;, 
+           PGPORT=9737L, PGDATABASE=&quot;wrds&quot;)
+wrds &lt;- dbConnect(RPostgres::Postgres())
+
+res &lt;- dbSendQuery(wrds, &quot;select * from crsp.dsf&quot;)
+data &lt;- dbFetch(res, n=10)
+dbClearResult(res)
+data</code></pre>
+<pre><code>##       cusip permno permco issuno hexcd hsiccd       date bidlo askhi    prc vol
+## 1  03838W10  62295   2242   2855     1   4941 1979-12-17  15.5  17.0 -16.25  NA
+## 2  03838W10  62295   2242   2855     1   4941 1979-12-18  15.0  16.5 -15.75  NA
+## 3  03838W10  62295   2242   2855     1   4941 1979-12-19  15.5  17.0 -16.25  NA
+## 4  03838W10  62295   2242   2855     1   4941 1979-12-20  15.0  16.5 -15.75  NA
+## 5  03838W10  62295   2242   2855     1   4941 1979-12-21  15.0  16.5 -15.75  NA
+## 6  03838W10  62295   2242   2855     1   4941 1979-12-24  15.0  16.5 -15.75  NA
+## 7  03838W10  62295   2242   2855     1   4941 1979-12-26  15.0  16.5 -15.75  NA
+## 8  03838W10  62295   2242   2855     1   4941 1979-12-27  14.5  16.0 -15.25  NA
+## 9  03838W10  62295   2242   2855     1   4941 1979-12-28  15.0  16.5 -15.75  NA
+## 10 03838W10  62295   2242   2855     1   4941 1979-12-31  15.0  16.5 -15.75  NA
+##            ret bid ask shrout cfacpr cfacshr openprc numtrd        retx
+## 1   0.00000000  NA  NA   1256   2.25    2.25      NA     NA  0.00000000
+## 2  -0.03076923  NA  NA   1256   2.25    2.25      NA     NA -0.03076923
+## 3   0.03174603  NA  NA   1256   2.25    2.25      NA     NA  0.03174603
+## 4  -0.03076923  NA  NA   1256   2.25    2.25      NA     NA -0.03076923
+## 5   0.02412698  NA  NA   1256   2.25    2.25      NA     NA  0.00000000
+## 6   0.00000000  NA  NA   1256   2.25    2.25      NA     NA  0.00000000
+## 7   0.00000000  NA  NA   1256   2.25    2.25      NA     NA  0.00000000
+## 8  -0.03174603  NA  NA   1256   2.25    2.25      NA     NA -0.03174603
+## 9   0.03278688  NA  NA   1256   2.25    2.25      NA     NA  0.03278688
+## 10  0.00000000  NA  NA   1258   2.25    2.25      NA     NA  0.00000000</code></pre>
+<p>The WRDS page remarks here that</p>
+<blockquote>
+<p><strong>IMPORTANT</strong>: Setting <code>n=10</code> limits the results to 10 records (also called observations).
+The table <code>crsp.dsf</code> is CRSP’s Daily Stock File and tracks thousands of stocks over almost a hundred years - such a query that returns all records would take a very long time.
+In reality, most queries are far more specific, as shown in the examples below.
+It is highly recommended to develop your code using such a limit, then simply remove that limit (by by setting <code>n =-1</code>) when you are ready to run your final code.</p>
+</blockquote>
+<p>But that is precisely where <code>dplyr</code> shines.</p>
+<p>Here’s the <code>dplyr</code> approach.</p>
+<pre class="r"><code>library(dplyr, warn.conflicts = FALSE)
+
+dsf &lt;- tbl(wrds, sql(&quot;SELECT * FROM crsp.dsf&quot;))
+dsf</code></pre>
+<pre><code>## # Source:   SQL [?? x 20]
+## # Database: postgres [iangow@wrds-pgdata.wharton.upenn.edu:9737/wrds]
+##    cusip permno permco issuno hexcd hsiccd date       bidlo askhi   prc   vol
+##    &lt;chr&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;date&gt;     &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+##  1 6548…  62296   6175   7725     3   8350 1998-03-13  6.88  7.12  7    17574
+##  2 6548…  62296   6175   7725     3   8350 1998-03-16  7     7.38  7.38 14880
+##  3 6548…  62296   6175   7725     3   8350 1998-03-17  7.12  7.5   7.25  6850
+##  4 6548…  62296   6175   7725     3   8350 1998-03-18  7.12  7.69  7.69 19478
+##  5 6548…  62296   6175   7725     3   8350 1998-03-19  7.62  8.5   8.38 24157
+##  6 6548…  62296   6175   7725     3   8350 1998-03-20  8.12  8.16  8.12  4175
+##  7 6548…  62296   6175   7725     3   8350 1998-03-23  8     8.25  8.12 11733
+##  8 6548…  62296   6175   7725     3   8350 1998-03-24  8.12  8.5   8.5  10750
+##  9 6548…  62296   6175   7725     3   8350 1998-03-25  8.12  8.5   8.25  5268
+## 10 6548…  62296   6175   7725     3   8350 1998-03-26  8     8.31  8.16  8300
+## # … with more rows, and 9 more variables: ret &lt;dbl&gt;, bid &lt;dbl&gt;, ask &lt;dbl&gt;,
+## #   shrout &lt;dbl&gt;, cfacpr &lt;dbl&gt;, cfacshr &lt;dbl&gt;, openprc &lt;dbl&gt;, numtrd &lt;dbl&gt;,
+## #   retx &lt;dbl&gt;</code></pre>
+<p>The WRDS page continues:</p>
+<blockquote>
+<p>Datasets often contain a large number of variables (column headers) such as <code>date</code>, <code>ticker</code>, <code>cusip</code>, <code>price</code>, or a host of other values depending on the dataset.
+Limiting the number of variables returned in queries speeds up the execution time and decreases the size of the returned data. Once you looked at the metadata and see the available variables, you probably want to specify only those you are interested in.
+You can do this by specifying each variable to query explicitly using the select statement, instead of selecting all (using the asterisk <code>*</code> which matches all variables).</p>
+</blockquote>
+<p>Here is the WRDS code:</p>
+<pre class="r"><code>res &lt;- dbSendQuery(wrds, &quot;select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf&quot;)
+data &lt;- dbFetch(res, n=10)
+dbClearResult(res)
+data</code></pre>
+<pre><code>##       cusip permno       date bidlo   askhi
+## 1  65488910  62296 1998-03-13 6.875 7.12500
+## 2  65488910  62296 1998-03-16 7.000 7.37500
+## 3  65488910  62296 1998-03-17 7.125 7.50000
+## 4  65488910  62296 1998-03-18 7.125 7.68750
+## 5  65488910  62296 1998-03-19 7.625 8.50000
+## 6  65488910  62296 1998-03-20 8.125 8.15625
+## 7  65488910  62296 1998-03-23 8.000 8.25000
+## 8  65488910  62296 1998-03-24 8.125 8.50000
+## 9  65488910  62296 1998-03-25 8.125 8.50000
+## 10 65488910  62296 1998-03-26 8.000 8.31250</code></pre>
+<p>But we already have <code>dsf</code> defined above, so we can do this using <code>dplyr</code>.</p>
+<pre class="r"><code>dsf %&gt;%
+  select(cusip, permno, date, bidlo, askhi)</code></pre>
+<pre><code>## # Source:   lazy query [?? x 5]
+## # Database: postgres [iangow@wrds-pgdata.wharton.upenn.edu:9737/wrds]
+##    cusip    permno date       bidlo askhi
+##    &lt;chr&gt;     &lt;dbl&gt; &lt;date&gt;     &lt;dbl&gt; &lt;dbl&gt;
+##  1 61585710  62324 1997-03-12  21.8  22  
+##  2 61585710  62324 1997-03-13  21.4  21.9
+##  3 61585710  62324 1997-03-14  21.4  21.6
+##  4 61585710  62324 1997-03-17  21.4  21.5
+##  5 61585710  62324 1997-03-18  21.2  21.8
+##  6 61585710  62324 1997-03-19  21.2  21.5
+##  7 61585710  62324 1997-03-20  21    21.4
+##  8 61585710  62324 1997-03-21  20.8  21.2
+##  9 61585710  62324 1997-03-24  21    21.4
+## 10 61585710  62324 1997-03-25  21.2  21.8
+## # … with more rows</code></pre>
+<p>WRDS then discussing <code>WHERE</code> clauses.</p>
+<blockquote>
+<p>You can also further refine your query by selecting data that meets a certain criteria for one or more of these variables. You can limit the returned results to data which has an <code>askhi</code> value above 2500 and a <code>bidlo</code> value under 2000 as follows.</p>
+</blockquote>
+<pre class="r"><code>res &lt;- dbSendQuery(wrds, &quot;select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf
+                   where askhi &gt; 2500
+                   and bidlo &lt; 2000&quot;)
+data &lt;- dbFetch(res, n=10)
+dbClearResult(res)
+data</code></pre>
+<pre><code>## [1] cusip  permno date   bidlo  askhi 
+## &lt;0 rows&gt; (or 0-length row.names)</code></pre>
+<p>Again, <code>dplyr</code> is more elegant.</p>
+<pre class="r"><code>dsf %&gt;%
+  select(cusip, permno, date, bidlo, askhi) %&gt;%
+  filter(askhi &gt; 2500, bidlo &lt; 2000)</code></pre>
+<pre><code>## # Source:   lazy query [?? x 5]
+## # Database: postgres [iangow@wrds-pgdata.wharton.upenn.edu:9737/wrds]
+## # … with 5 variables: cusip &lt;chr&gt;, permno &lt;dbl&gt;, date &lt;date&gt;, bidlo &lt;dbl&gt;,
+## #   askhi &lt;dbl&gt;</code></pre>
+<blockquote>
+<p>It turns out that (as of 2017) there are only 27 records that match the above criteria.</p>
+</blockquote>
+<p>Actually, it seems there are none!</p>
+<blockquote>
+<h2 id="searching-by-date">Searching by Date</h2>
+<p>One of the more common methods of querying data is by date. WRDS uses the date notation convention of <code>yyyy-mm-dd</code>, so January 4th, 2013, the first trading day of 2013, would be formatted as <code>2013-01-04</code>.
+Dates in your SQL queries must be surrounded by single quotes.</p>
+</blockquote>
+<p>Well, this is ISO 8601 and PostgreSQL, not WRDS.
+But, fine.</p>
+<blockquote>
+<p>To query by date:</p>
+</blockquote>
+<pre class="r"><code>res &lt;- dbSendQuery(wrds, &quot;select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf
+                   where date = &#39;2013-01-04&#39;&quot;)
+data &lt;- dbFetch(res, n=-1)
+dbClearResult(res)</code></pre>
+<p>And the <code>dplyr</code> version:</p>
+<pre class="r"><code>dsf %&gt;%
+  select(cusip, permno, date, bidlo, askhi) %&gt;%
+  filter(date == &#39;2013-01-04&#39;)</code></pre>
+<pre><code>## # Source:   lazy query [?? x 5]
+## # Database: postgres [iangow@wrds-pgdata.wharton.upenn.edu:9737/wrds]
+##    cusip    permno date        bidlo  askhi
+##    &lt;chr&gt;     &lt;dbl&gt; &lt;date&gt;      &lt;dbl&gt;  &lt;dbl&gt;
+##  1 36720410  10001 2013-01-04  9.28   9.48 
+##  2 05978R10  10002 2013-01-04  2.92   2.92 
+##  3 00103110  10025 2013-01-04 59.2   61.0  
+##  4 46603210  10026 2013-01-04 64.5   65.8  
+##  5 29402E10  10028 2013-01-04  5.11   5.37 
+##  6 72913210  10032 2013-01-04 25.9   26.5  
+##  7 77467X10  10044 2013-01-04 10.9   11.2  
+##  8 41043F20  10051 2013-01-04 28.4   29.2  
+##  9 00621210  10065 2013-01-04 10.8   10.9  
+## 10 02713510  10100 2013-01-04  0.400  0.470
+## # … with more rows</code></pre>
+<blockquote>
+<p>Searching by date ranges is similar, as shown in the following example.</p>
+<p>To query by date range:</p>
+</blockquote>
+<pre class="r"><code>res &lt;- dbSendQuery(wrds, &quot;select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf
+                   where date between &#39;2013-01-07&#39;
+                   and &#39;2013-01-08&#39;&quot;)
+data &lt;- dbFetch(res, n=-1)
+dbClearResult(res)</code></pre>
+<p>And with <code>dplyr</code>:</p>
+<pre class="r"><code>dsf %&gt;%
+  select(cusip, permno, date, bidlo, askhi) %&gt;%
+  filter(between(date, &#39;2013-01-07&#39;, &#39;2013-01-08&#39;))</code></pre>
+<pre><code>## # Source:   lazy query [?? x 5]
+## # Database: postgres [iangow@wrds-pgdata.wharton.upenn.edu:9737/wrds]
+##    cusip    permno date        bidlo  askhi
+##    &lt;chr&gt;     &lt;dbl&gt; &lt;date&gt;      &lt;dbl&gt;  &lt;dbl&gt;
+##  1 36720410  10001 2013-01-07  9.30   9.48 
+##  2 05978R10  10002 2013-01-07  2.92   2.98 
+##  3 00103110  10025 2013-01-07 59.4   61.5  
+##  4 46603210  10026 2013-01-07 63.4   64.8  
+##  5 29402E10  10028 2013-01-07  5.09   5.38 
+##  6 72913210  10032 2013-01-07 25.7   26.3  
+##  7 77467X10  10044 2013-01-07 11.1   11.2  
+##  8 41043F20  10051 2013-01-07 28.2   28.8  
+##  9 00621210  10065 2013-01-07 10.9   10.9  
+## 10 02713510  10100 2013-01-07  0.400  0.420
+## # … with more rows</code></pre>
+<blockquote>
+<h2 id="joining-data-from-separate-datasets">Joining Data from Separate Datasets</h2>
+</blockquote>
+<blockquote>
+<p>Data from separate datasets can be joined and analyzed together. The following example will join the Compustat Fundamentals data set (<code>comp.funda</code>) with Compustat’s pricing dataset (<code>comp.secm</code>), and then query for total assets and liabilities mixed with monthly close price and shares outstanding.</p>
+<p>To join and query two Compustat datasets:</p>
+</blockquote>
+<pre class="r"><code>res &lt;- dbSendQuery(wrds, &quot;select a.gvkey, a.datadate, a.at, a.lt, b.prccm, b.cshoq
+                   from comp.funda a join comp.secm b
+                   on a.gvkey = b.gvkey
+                   and a.datadate = b.datadate
+                   where a.tic = &#39;IBM&#39;
+                   and a.datafmt = &#39;STD&#39;
+                   and a.consol = &#39;C&#39;
+                   and a.indfmt = &#39;INDL&#39;&quot;)
+data &lt;- dbFetch(res, n = -1)
+dbClearResult(res)
+head(data)</code></pre>
+<pre><code>##    gvkey   datadate       at       lt    prccm cshoq
+## 1 006066 1962-12-31 2112.301  731.700 389.9996    NA
+## 2 006066 1963-12-31 2373.857  782.119 506.9994    NA
+## 3 006066 1964-12-31 3309.152 1055.072 409.4995    NA
+## 4 006066 1965-12-31 3744.917 1166.771 498.9991    NA
+## 5 006066 1966-12-31 4660.777 1338.149 371.4997    NA
+## 6 006066 1967-12-31 5598.668 1767.067 626.9995    NA</code></pre>
+<p>But <code>dplyr</code> does joins (actually, almost anything that can be written in SQL can be done elegantly using <code>dplyr</code>).
+In this case, I think the code can be rewritten to better reflect the flow of thinking, which is "get some fundamental data and also pull in a couple of elements of data from <code>secm</code>.</p>
+<pre class="r"><code>funda &lt;- tbl(wrds, sql(&quot;SELECT * FROM comp.funda&quot;))
+secm &lt;- tbl(wrds, sql(&quot;SELECT * FROM comp.secm&quot;))
+
+prices &lt;-
+  secm %&gt;%
+  select(gvkey, datadate, prccm, cshoq)
+
+data &lt;-
+  funda %&gt;%
+  filter(datafmt == &#39;STD&#39;, consol == &#39;C&#39;, indfmt == &#39;INDL&#39;) %&gt;%
+  filter(tic == &#39;IBM&#39;) %&gt;%
+  inner_join(prices, by=c(&quot;gvkey&quot;, &quot;datadate&quot;)) %&gt;%
+  select(gvkey, datadate, at, lt, prccm, cshoq)
+data</code></pre>
+<pre><code>## # Source:   lazy query [?? x 6]
+## # Database: postgres [iangow@wrds-pgdata.wharton.upenn.edu:9737/wrds]
+##    gvkey  datadate      at    lt prccm cshoq
+##    &lt;chr&gt;  &lt;date&gt;     &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+##  1 006066 1962-12-31 2112.  732.  390.   NA 
+##  2 006066 1963-12-31 2374.  782.  507.   NA 
+##  3 006066 1964-12-31 3309. 1055.  409.   NA 
+##  4 006066 1965-12-31 3745. 1167.  499.   NA 
+##  5 006066 1966-12-31 4661. 1338.  371.   NA 
+##  6 006066 1967-12-31 5599. 1767.  627.   NA 
+##  7 006066 1968-12-31 6743. 2174.  315.   NA 
+##  8 006066 1969-12-31 7390. 2113.  364.  114.
+##  9 006066 1970-12-31 8539. 2592.  318.  115.
+## 10 006066 1971-12-31 9576. 2934.  336.  116.
+## # … with more rows</code></pre>

@@ -1,0 +1,187 @@
+---
+title: Accessing WRDS data
+author: Ian D. Gow
+date: '2020-06-16'
+slug: accessing-wrds-data
+categories: []
+tags: []
+---
+
+WRDS provides some sample code for accessing the WRDS PostgreSQL database [here](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-r/querying-wrds-data-r/).
+The problem with this code examples is that they use `dplyr`, which offers a "lazy evaluation" approach 
+that is vastly superior accessing remote data sources.
+
+Another advantage of using a `dplyr` approach is that the code carries over to local data sources, whereas raw SQL would not.
+
+Below, I translate each example provided by WRDS into equivalent `dplyr`.
+
+```{r, secret}
+Sys.setenv(PGUSER="iangow")
+```
+
+```{r}
+library(DBI)
+Sys.setenv(PGHOST="wrds-pgdata.wharton.upenn.edu", 
+           PGPORT=9737L, PGDATABASE="wrds")
+wrds <- dbConnect(RPostgres::Postgres())
+
+res <- dbSendQuery(wrds, "select * from crsp.dsf")
+data <- dbFetch(res, n=10)
+dbClearResult(res)
+data
+```
+
+The WRDS page remarks here that 
+
+> **IMPORTANT**: Setting `n=10` limits the results to 10 records (also called observations).
+> The table `crsp.dsf` is CRSP's Daily Stock File and tracks thousands of stocks over almost a hundred years - such a query that returns all records would take a very long time.
+> In reality, most queries are far more specific, as shown in the examples below. 
+It is highly recommended to develop your code using such a limit, then simply remove that limit (by by setting `n =-1`) when you are ready to run your final code.
+
+But that is precisely where `dplyr` shines. 
+
+Here's the `dplyr` approach.
+
+```{r}
+library(dplyr, warn.conflicts = FALSE)
+
+dsf <- tbl(wrds, sql("SELECT * FROM crsp.dsf"))
+dsf
+```
+
+The WRDS page continues:
+
+> Datasets often contain a large number of variables (column headers) such as `date`, `ticker`, `cusip`, `price`, or a host of other values depending on the dataset. 
+> Limiting the number of variables returned in queries speeds up the execution time and decreases the size of the returned data. Once you looked at the metadata and see the available variables, you probably want to specify only those you are interested in. 
+> You can do this by specifying each variable to query explicitly using the select statement, instead of selecting all (using the asterisk `*` which matches all variables). 
+
+Here is the WRDS code:
+```{r}
+res <- dbSendQuery(wrds, "select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf")
+data <- dbFetch(res, n=10)
+dbClearResult(res)
+data
+```
+
+But we already have `dsf` defined above, so we can do this using `dplyr`.
+
+```{r}
+dsf %>%
+  select(cusip, permno, date, bidlo, askhi)
+```
+
+WRDS then discussing `WHERE` clauses.
+
+> You can also further refine your query by selecting data that meets a certain criteria for one or more of these variables. You can limit the returned results to data which has an `askhi` value above 2500 and a `bidlo` value under 2000 as follows.
+
+```{r, cache=TRUE}
+res <- dbSendQuery(wrds, "select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf
+                   where askhi > 2500
+                   and bidlo < 2000")
+data <- dbFetch(res, n=10)
+dbClearResult(res)
+data
+```
+
+Again, `dplyr` is more elegant.
+
+```{r, cache=TRUE}
+dsf %>%
+  select(cusip, permno, date, bidlo, askhi) %>%
+  filter(askhi > 2500, bidlo < 2000)
+```
+
+> It turns out that (as of 2017) there are only 27 records that match the above criteria. 
+
+Actually, it seems there are none!
+
+> ## Searching by Date
+> 
+> One of the more common methods of querying data is by date. WRDS uses the date notation convention of `yyyy-mm-dd`, so January 4th, 2013, the first trading day of 2013, would be formatted as `2013-01-04`. 
+Dates in your SQL queries must be surrounded by single quotes.
+
+Well, this is ISO 8601 and PostgreSQL, not WRDS. 
+But, fine.
+
+> To query by date:
+
+```{r}
+res <- dbSendQuery(wrds, "select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf
+                   where date = '2013-01-04'")
+data <- dbFetch(res, n=-1)
+dbClearResult(res)
+```
+
+And the `dplyr` version:
+
+```{r}
+dsf %>%
+  select(cusip, permno, date, bidlo, askhi) %>%
+  filter(date == '2013-01-04')
+```
+
+> Searching by date ranges is similar, as shown in the following example.
+> 
+> To query by date range:
+
+```{r, cache=TRUE}
+res <- dbSendQuery(wrds, "select cusip,permno,date,bidlo,askhi
+                   from crsp.dsf
+                   where date between '2013-01-07'
+                   and '2013-01-08'")
+data <- dbFetch(res, n=-1)
+dbClearResult(res)
+```
+
+And with `dplyr`:
+
+```{r, cache=TRUE}
+dsf %>%
+  select(cusip, permno, date, bidlo, askhi) %>%
+  filter(between(date, '2013-01-07', '2013-01-08'))
+```
+
+
+
+> ## Joining Data from Separate Datasets
+
+> Data from separate datasets can be joined and analyzed together. The following example will join the Compustat Fundamentals data set (`comp.funda`) with Compustat's pricing dataset (`comp.secm`), and then query for total assets and liabilities mixed with monthly close price and shares outstanding.
+> 
+> To join and query two Compustat datasets:
+
+```{r, cache=TRUE}
+res <- dbSendQuery(wrds, "select a.gvkey, a.datadate, a.at, a.lt, b.prccm, b.cshoq
+                   from comp.funda a join comp.secm b
+                   on a.gvkey = b.gvkey
+                   and a.datadate = b.datadate
+                   where a.tic = 'IBM'
+                   and a.datafmt = 'STD'
+                   and a.consol = 'C'
+                   and a.indfmt = 'INDL'")
+data <- dbFetch(res, n = -1)
+dbClearResult(res)
+head(data)
+```
+
+But `dplyr` does joins (actually, almost anything that can be written in SQL can be done elegantly using `dplyr`).
+In this case, I think the code can be rewritten to better reflect the flow of thinking, which is "get some fundamental data and also pull in a couple of elements of data from `secm`.
+
+```{r, cache=TRUE}
+funda <- tbl(wrds, sql("SELECT * FROM comp.funda"))
+secm <- tbl(wrds, sql("SELECT * FROM comp.secm"))
+
+prices <-
+  secm %>%
+  select(gvkey, datadate, prccm, cshoq)
+
+data <-
+  funda %>%
+  filter(datafmt == 'STD', consol == 'C', indfmt == 'INDL') %>%
+  filter(tic == 'IBM') %>%
+  inner_join(prices, by=c("gvkey", "datadate")) %>%
+  select(gvkey, datadate, at, lt, prccm, cshoq)
+data
+```

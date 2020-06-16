@@ -19,10 +19,7 @@ library(RcppRoll)
 covid_world_raw <- read_csv(paste0("https://",
                                    "covid.ourworldindata.org",
                                    "/data/owid-covid-data.csv"))
-```
 
-
-```{r focus_data}
 selected_countries <- c("CHN", "USA", "IDN", 
                         "IND", "BRA", "MEX")
 
