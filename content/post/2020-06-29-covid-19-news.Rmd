@@ -1,8 +1,8 @@
 ---
-title: Customized Covid-19 news
+title: More customized Covid-19 news
 author: Ian D. Gow
-date: '2020-06-09'
-slug: customized-covid-19-news
+date: '2020-06-29'
+slug: covid-19-news
 categories: []
 tags: []
 ---
@@ -22,7 +22,7 @@ The two key data variables are *cases* and *deaths*. As a measure of progress of
 
 Getting the data is quite easy. 
 
-```{r get_data, message=FALSE}
+```{r get_data, message=FALSE, cache=TRUE}
 library(readr)
 library(lubridate)
 library(dplyr, warn.conflicts = FALSE)
@@ -31,19 +31,6 @@ library(RcppRoll)
 
 raw <- read_csv(paste0("https://raw.githubusercontent.com/",
                        "nytimes/covid-19-data/master/us-states.csv"))
-
-covid_world_raw <- read_csv(paste0("https://covid.ourworldindata.org",
-                               "/data/owid-covid-data.csv"),
-                            col_types = cols(.default = col_guess(),
-                                             new_tests = col_double(),
-                                             new_tests_smoothed = col_double(),
-                                             new_tests_smoothed_per_thousand = col_double(),
-                                             tests_per_case =  col_double(),
-                                             positive_rate =  col_double(),
-                                             total_tests = col_double(),
-                                             total_tests_per_thousand = col_double(),
-                                             new_tests_per_thousand = col_double(),
-                                             tests_units = col_character()))
 
 covid_states <-
   raw %>%
@@ -57,27 +44,19 @@ covid_states <-
 
 Initially, I wanted to consider Australia as a US state for the purpose of comparison. For the US, I focused on a few states of interest: New York was the worst-hit state, Massachusetts is where I am now, and California is the most populous state. Pennsylvania provides an interesting comparison for Massachusetts. Apart from Australia, I also considered the United Kingdom, which was hit at about the same time as New York.
 
-```{r focus_data}
-selected_states <- c("Massachusetts", "New York", "Pennsylvania", "California")
-selected_countries <- c("AUS", "GBR")
+```{r focus_data, cache=TRUE}
+selected_states <- c("Florida", "Texas" , "California", "Georgia")
 
-covid_aus_usa <-
-  covid_world_raw %>%
-  filter(iso_code %in% selected_countries) %>%
-  select(location:new_deaths) %>%
-  rename(state = location)
-  
 covid_selected <-
   covid_states %>%
-  filter(state %in% selected_states) %>%
-  union_all(covid_aus_usa)
+  filter(state %in% selected_states)
 ```
 
 ### Cases
 
 One thing I noticed initially was a definite lumpiness to the data (e.g., many more deaths on Tuesdays rather than Sundays in Pennsylvania), which I assume is down to reporting rather than actual events. Initially, I used a four-day moving average, but here I use a seven-day moving average (as the four-day one still showed clean peaks and valleys).
 
-```{r plot_cases}
+```{r plot_cases, cache=TRUE}
 covid_selected %>%
   group_by(state) %>%
   arrange(date) %>%
@@ -91,7 +70,7 @@ covid_selected %>%
 
 ### Deaths
 
-```{r plot_deaths}
+```{r plot_deaths, cache=TRUE}
 # So use a seven-day rolling average
 covid_selected %>%
   group_by(state) %>%
